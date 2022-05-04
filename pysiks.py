@@ -1,50 +1,21 @@
 from aifc import Error
 import numpy as np
+import concurrent.futures as future
 
 class Physics_Canvas:
     
-    def __init__(self, w, h, walls, res) -> None:
-        if w%2 == 0 or h%2 == 0 or res%2 == 0 :
-            raise Error('Even width and/or height and/or resolution is unsupported')
+    def __init__(self, w, h, res) -> None:
+        if w%2 == 1 or h%2 == 1:
+            raise Error('Uneven width and/or height is unsupported')
         self.width = w
         self.height = h
         self.res = res
-        self.matrix = self.matrix_generator(walls) #[[[w0, w1], [w2, w3]...], [[h0, h1]...], [[w0, w1]...], [[h0, h1]...]] starts at top goes anti-clockwise always left to right and up to down
         self.rect_names = {}
         self.rects = []
-
-    def __str__(self) -> str:
-        return str(self.matrix)
-        
-
-    def matrix_generator(self, walls):
-        matrix = np.full((self.height*self.res+2, self.width*self.res+2), ' ')
-        slicer = {
-            0 : matrix[0],
-            1 : matrix[:, -1],
-            2 : matrix[-1],
-            3 : matrix[:, 0]
-        }
-        for i, e in enumerate(walls):
-            for ee in e:
-                if ee != []:
-                    for n in range(len(slicer[i])):
-                        if n in range((ee[0]-1)*self.res+1, ee[1]*self.res+1):
-                            slicer[i][n] = 'b'
-                        else:
-                            slicer[i][n] = 'w'
-        return matrix
-
-    def matrix_cord(self, x, y):
-        return (self.height//2+1+y, self.width//2+1+x)
-
-    def vector_to_matrix(self, name, *vectors):
-        for vector in vectors:
-            vector *= self.res
-            vector = np.round_(vector)
+        self.forces = {}
 
 
-    class rectangle:
+    class Rectangle:
 
         def __init__(self, w, h, m):
             self.width = w
@@ -56,34 +27,117 @@ class Physics_Canvas:
             self.angle = 0
             self.angle_vel = 0
             self.corners = self.cal_corners()
+            self.moveable = True
         
         def cal_corners(self):
             r = (self.width**2+self.height**2)/4
             a = np.tan(self.height/self.width)
-            return [
-                r*np.array([np.cos(a+self.angle), np.sin(a+self.angle)]),
-                r*np.array([np.cos(np.pi-a+self.angle), np.sin(np.pi-a+self.angle)]),
-                r*np.array([np.cos(np.pi+a+self.angle), np.sin(np.pi+a+self.angle)]),
-                r*np.array([np.cos(2*np.pi-a+self.angle), np.sin(2*np.pi-a+self.angle)])
+            self.corners = [
+                r*np.array([np.cos(a+self.angle), np.sin(a+self.angle)])+self.pos,
+                r*np.array([np.cos(np.pi-a+self.angle), np.sin(np.pi-a+self.angle)])+self.pos,
+                r*np.array([np.cos(np.pi+a+self.angle), np.sin(np.pi+a+self.angle)])+self.pos,
+                r*np.array([np.cos(2*np.pi-a+self.angle), np.sin(2*np.pi-a+self.angle)])+self.pos
                 ] #start at top right goes anti-clockwise
 
+        def proj_dir(self):
+            dir1 = self.corners[1]-self.corners[0]
+            e1 = dir1/np.linalg.norm(dir1)
+            dir2 = self.corners[0]-self.corners[3]
+            e2 = dir2/np.linalg.norm(dir2)
+            return e1, e2
 
         def move_to(self, x, y):
             self.pos = np.array([x,y])
-            self.corners = self.cal_corners()
-            return self.corners
+            self.cal_corners()
         
         def rotate_to(self, theta):
             self.angle = theta
-            self.corners = self.cal_corners()
-            return self.corners
+            self.cal_corners()
+        
+        def move(self, dt, s):
+            if self.moveable:
+                self.pos += self.vel*dt + s
+                self.cal_corners()
+            else:
+                pass
+
+        def rotate(self, dt, theta):
+            if self.moveable:
+                self.angle += self.angle_vel*dt + theta
+                self.corners = self.cal_corners()
+            else:
+                pass
+        
+    
+    def collison_detector(self, rects):
+        pass
+
+    def collision_detector_start(self, rects):
+        rect_pairs = [[rect1, rect2] for rect1 in rects for rect2 in rects if rect1 < rect2]
+        colliding = []
+        with future.ProcessPoolExecutor() as ex:
+            results = ex.map(self.collison_detector, rect_pairs)
+            for r in results:
+                colliding.append(r)
+        return colliding
+        
+        
+
+
+    def collision_handler(self, old_vs):
+        pass
+
+    def collisions(self):
+        pass
+
+    def update(self, dt):
+        old_v = []
+        for i, rect in enumerate(self.rects):
+            a = np.zeros(2)
+            alpha = 0
+            Dt = dt
+            for name, force in self.forces[i].items():
+                if force[1] == 'inf':
+                    a += force[0]/rect.mass
+                    alpha += np.linalg.norm(force[0])*force[2]/rect.momI
+                elif force[1]<= dt:
+                    a += force[0]/rect.mass
+                    alpha += np.linalg.norm(force[0])*force[2]/rect.momI
+                    Dt = force[1]
+                    if Dt < 0:
+                        raise Error('Negative time differance')
+                    self.forces[i][name] = 0
+                else:
+                    a += force[0]/rect.mass
+                    alpha += np.linalg.norm(force[0])*force[2]/rect.momI
+                    force[1] += -dt
+            self.forces[i] = {k: v for k, v in self.forces[i].items() if v != 0}    
+            
+            s = a/2*Dt**2
+            theta = alpha/2*Dt**2
+            rect.move(dt, s)
+            rect.rotate(dt, theta)
+            old_v.append(rect.vel)
+            rect.vel += a*Dt
+            rect.angle_vel += alpha*Dt
+
+        self.collisions()
     
     def gen_rect(self, name, w, h, m):
-        self.rects.append(self.rectangle(w, h, m))
-        self.rect_names[name] = len(self.rects)-1
+        self.rects.append(self.Rectangle(w, h, m))
+        i = len(self.rects)-1
+        self.rect_names[name] = i
+        self.forces[i] = {}
 
-    
-    def move_rect(self, name, x, y):
+    def force(self, F, t, a, Fname, *names):
+        for name in names:
+            try:
+                self.forces[self.rect_names[name]][Fname] = [F, t, a]
+            except KeyError:
+                raise Error(f'There is no rectangle by the name {name}')
+
+
+    def place_rect(self, name, x, y):
         try:
             self.rects[self.rect_names[name]].move_to(x,y)
         except KeyError:
@@ -92,13 +146,36 @@ class Physics_Canvas:
     
     def rotate_rect(self, name, theta):
         try:
-            self.rects[self.rect_names[name]].rotate(theta)
+            self.rects[self.rect_names[name]].rotate_to(theta)
         except KeyError:
             raise Error(f'There is no rectangle by the name {name}')
+    
+    def get_vel(self, name):
+        return self.rects[self.rect_names[name]].vel
+    
+    def get_pos(self, name):
+        return self.rects[self.rect_names[name]].pos
+    
+    def get_angle(self, name):
+        return self.rects[self.rect_names[name]].angle
+
+    def get_angle_vel(self, name):
+        return self.rects[self.rect_names[name]].angle_vel
+
+    def make_immoveable(self, name):
+        self.rects[self.rect_names[name]].moveable = False
+    
+    def make_moveable(self, name):
+        self.rects[self.rect_names[name]].moveable = True
 
 
     
 
-e = Physics_Canvas(15, 15, [[[1,1]], [[1,3]], [[1,1]], [[1,3]]], 1)
+e = Physics_Canvas(16, 16, 1000)
 
-print(e)
+e.gen_rect('Tony', 1, 1, 2)
+e.gen_rect('Bony', 1, 1, 1)
+e.force(1, 1.5, 1, 'Acc', 'Tony')
+e.force(2, 1.5, 1, 'Acc', 'Bony')
+e.update(1)
+print(e.get_pos('Tony'), e.get_pos('Bony'))
