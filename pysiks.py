@@ -1,6 +1,14 @@
 from aifc import Error
+from matplotlib.patches import Rectangle
 import numpy as np
 import concurrent.futures as future
+
+def get_key(val, dict):
+    for key, value in dict.items():
+        if val == value:
+            return key
+ 
+    return "There is no such Key"
 
 class Physics_Canvas:
     
@@ -26,17 +34,17 @@ class Physics_Canvas:
             self.vel = np.zeros(2)
             self.angle = 0
             self.angle_vel = 0
-            self.corners = self.cal_corners()
+            self.cal_corners()
             self.moveable = True
         
         def cal_corners(self):
-            r = (self.width**2+self.height**2)/4
-            a = np.tan(self.height/self.width)
+            r = np.sqrt((self.width**2+self.height**2)/4)
+            a = np.arctan(self.height/self.width)
             self.corners = [
-                r*np.array([np.cos(a+self.angle), np.sin(a+self.angle)])+self.pos,
-                r*np.array([np.cos(np.pi-a+self.angle), np.sin(np.pi-a+self.angle)])+self.pos,
-                r*np.array([np.cos(np.pi+a+self.angle), np.sin(np.pi+a+self.angle)])+self.pos,
-                r*np.array([np.cos(2*np.pi-a+self.angle), np.sin(2*np.pi-a+self.angle)])+self.pos
+                np.array([r*np.cos(a+self.angle), r*np.sin(a+self.angle)])+self.pos,
+                np.array([r*np.cos(np.pi-a+self.angle), r*np.sin(np.pi-a+self.angle)])+self.pos,
+                np.array([r*np.cos(np.pi+a+self.angle), r*np.sin(np.pi+a+self.angle)])+self.pos,
+                np.array([r*np.cos(2*np.pi-a+self.angle), r*np.sin(2*np.pi-a+self.angle)])+self.pos
                 ] #start at top right goes anti-clockwise
 
         def proj_dir(self):
@@ -44,14 +52,14 @@ class Physics_Canvas:
             e1 = dir1/np.linalg.norm(dir1)
             dir2 = self.corners[0]-self.corners[3]
             e2 = dir2/np.linalg.norm(dir2)
-            return e1, e2
+            return np.abs(e1), np.abs(e2)
 
         def move_to(self, x, y):
-            self.pos = np.array([x,y])
+            self.pos = np.array([float(x),float(y)])
             self.cal_corners()
         
         def rotate_to(self, theta):
-            self.angle = theta
+            self.angle = float(theta)
             self.cal_corners()
         
         def move(self, dt, s):
@@ -64,34 +72,61 @@ class Physics_Canvas:
         def rotate(self, dt, theta):
             if self.moveable:
                 self.angle += self.angle_vel*dt + theta
-                self.corners = self.cal_corners()
+                self.cal_corners()
             else:
                 pass
         
+        def set_vel(self, vx, vy):
+            self.vel = np.array([float(vx),float(vy)])
+        
     
-    def collison_detector(self, rects):
-        pass
+    def collison_check(self, rects):
+        rect1:Rectangle = rects[0]
+        rect2:Rectangle = rects[1]
+        e1, e2 = rect1.proj_dir()
+        dir = [e1, e2]
+        if rect1.angle%(np.pi/2) != rect2.angle%(np.pi/2):
+            e3, e4 = rect2.proj_dir()
+            dir.append(e3)
+            dir.append(e4)
+        for direction in dir:
+            minmax = [[None,None], [None,None]]
+            for i, rect in enumerate([rect1, rect2]):
+                for corner in rect.corners:
+                    x = np.dot(corner, direction)
+                    if minmax[i][1] is None or x > minmax[i][1]:
+                        minmax[i][1] = x
+                    if minmax[i][0] is None or x < minmax[i][0]:
+                        minmax[i][0] = x
+            if not minmax[0][0]>minmax[1][1] and not minmax[1][0]>minmax[0][1]:
+                return [rect1, rect2]
 
-    def collision_detector_start(self, rects):
-        rect_pairs = [[rect1, rect2] for rect1 in rects for rect2 in rects if rect1 < rect2]
+
+    def collision_detector(self, rects):
+        rect_pairs = [[rect1, rect2] for rect1 in rects for rect2 in rects if np.linalg.norm(rect1.pos) < np.linalg.norm(rect2.pos)]
         colliding = []
-        with future.ProcessPoolExecutor() as ex:
-            results = ex.map(self.collison_detector, rect_pairs)
+        with future.ThreadPoolExecutor() as ex:
+            results = ex.map(self.collison_check, rect_pairs)
             for r in results:
-                colliding.append(r)
+                if not r is None:
+                    colliding.append(r)
         return colliding
         
         
 
 
-    def collision_handler(self, old_vs):
+    def collision_handler(self, rects, vs):
         pass
 
-    def collisions(self):
-        pass
+    def collisions(self, old_vs):
+        collisions = self.collision_detector(self.rects)
+        if not collisions is []:
+            for pair in collisions:
+                self.collision_handler(pair, [old_vs[pair[0]], old_vs[pair[1]]])
+
 
     def update(self, dt):
-        old_v = []
+        old_v = {}
         for i, rect in enumerate(self.rects):
             a = np.zeros(2)
             alpha = 0
@@ -111,17 +146,17 @@ class Physics_Canvas:
                     a += force[0]/rect.mass
                     alpha += np.linalg.norm(force[0])*force[2]/rect.momI
                     force[1] += -dt
-            self.forces[i] = {k: v for k, v in self.forces[i].items() if v != 0}    
+            self.forces[i] = {k: v for k, v in self.forces[i].items() if v != 0}
             
             s = a/2*Dt**2
             theta = alpha/2*Dt**2
             rect.move(dt, s)
             rect.rotate(dt, theta)
-            old_v.append(rect.vel)
+            old_v[rect] = np.copy(rect.vel)
             rect.vel += a*Dt
             rect.angle_vel += alpha*Dt
 
-        self.collisions()
+        self.collisions(old_v)
     
     def gen_rect(self, name, w, h, m):
         self.rects.append(self.Rectangle(w, h, m))
@@ -167,6 +202,9 @@ class Physics_Canvas:
     
     def make_moveable(self, name):
         self.rects[self.rect_names[name]].moveable = True
+    
+    def set_vel(self, name, vx, vy):
+        self.rects[self.rect_names[name]].set_vel(vx, vy)
 
 
     
@@ -175,7 +213,7 @@ e = Physics_Canvas(16, 16, 1000)
 
 e.gen_rect('Tony', 1, 1, 2)
 e.gen_rect('Bony', 1, 1, 1)
-e.force(1, 1.5, 1, 'Acc', 'Tony')
-e.force(2, 1.5, 1, 'Acc', 'Bony')
-e.update(1)
-print(e.get_pos('Tony'), e.get_pos('Bony'))
+e.place_rect('Tony', 10, 10)
+e.set_vel('Tony', -1, -1)
+while True:
+    e.update(0.1)
