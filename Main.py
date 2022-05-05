@@ -1,4 +1,5 @@
 import tkinter as tk
+from pysiks import Physics_Canvas as PC
 
 window = tk.Tk()
 window.geometry('1000x700')
