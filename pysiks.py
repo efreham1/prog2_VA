@@ -223,6 +223,8 @@ class Physics_Canvas:
     def collision_handler(self, rects, vs, dt):
         e1 = -vs[0]/np.linalg.norm(vs[0]) if np.any(vs[0]!= np.zeros(2)) else np.zeros(2)
         e2 = -vs[1]/np.linalg.norm(vs[1]) if np.any(vs[1]!= np.zeros(2)) else np.zeros(2)
+        if np.all(e1 == np.zeros(2)) and np.all(e2 == np.zeros(2)):
+            raise Exception('Two rectangles without prior velocity are colliding')
         coll = self.collision_check(rects)
         while not coll == None:
             rects[0].creep(e1, 1/self.res)
