@@ -5,11 +5,10 @@ import concurrent.futures as future
 class Physics_Canvas:
     
     def __init__(self, res) -> None:
-        self.res = res
-        self.rects = {}
-        self.notification = {}
-        self.surfaces = {}
-
+        self.__res = res
+        self.__rects = {}
+        self.__notification = {}
+        self.__surfaces = {}
 
     class Rectangle:
 
@@ -63,7 +62,7 @@ class Physics_Canvas:
 
         def rotate(self, dt, theta, res):
             if self.moveable:
-                da = (self.angle + self.angle_vel*dt + theta)%(2*np.pi)-self.angle
+                da = self.angle_vel*dt + theta
                 if da > np.pi*2/res:
                     self.angle += da
                     self.cal_corners()
@@ -123,27 +122,26 @@ class Physics_Canvas:
             rect.forces['Friction'] = [Fmax*d, 'inf' ,np.zeros(2)]
 
         def apply_air_resistance(self, rect:Rectangle):
-            if self.air and self.on_surface(rect) and np.any(rect.vel != np.zeros(2)):
+            if self.air and self.on_surface(rect) and np.any(rect.vel != np.zeros(2)) and rect in self.for_rects:
                 normal_to_v = np.array([rect.vel[1], -rect.vel[0]])
-                A = np.abs(np.dot(normal_to_v, rect.corners[0]-rect.corners[2]))
+                A = np.abs(np.dot(normal_to_v/np.linalg.norm(normal_to_v), rect.corners[0]-rect.corners[2]))
                 rho = 1.225
                 v2 = np.dot(rect.vel, rect.vel)
-                Cd = 0.9
+                Cd = 0.8
                 d = -rect.vel/np.linalg.norm(rect.vel)
                 F = d/2*A*rho*v2*Cd
-                rect.forces['Air-resistance'] = [F*d, 'inf' ,np.zeros(2)]
+                rect.forces['Air-resistance'] = [F, 'inf' ,np.zeros(2)]
         
         def notify(self, rect):
             if self.to_Notify and self.on_surface(rect):
                 return self.message
 
-
-    def get_rect_name(self, rect):
-        for key in self.rects:
-            if self.rects[key] == rect:
+    def __get_rect_name(self, rect):
+        for key in self.__rects:
+            if self.__rects[key] == rect:
                 return key
     
-    def point_on_line(self, p1, p2, p3): # closest point on line p1-p2 to p3
+    def __point_on_line(self, p1, p2, p3): # closest point on line p1-p2 to p3
         x1, y1 = p1[0], p1[1]
         x2, y2 = p2[0], p2[1]
         x3, y3 = p3[0], p3[1]
@@ -152,7 +150,7 @@ class Physics_Canvas:
         a = (dy*(y3-y1)+dx*(x3-x1))/det #solving the equations system for the two lines' intersection, 2nd line being p3 and along the normal to p1-p2
         return np.array([x1+a*dx, y1+a*dy])
 
-    def force_a_cal(self, rects, old_vs, dt):
+    def __force_a_cal(self, rects, old_vs, dt):
         dp1 = -2*rects[1].mass/(rects[0].mass + rects[1].mass)*np.dot(old_vs[0]-old_vs[1], rects[0].pos-rects[1].pos)/(np.linalg.norm(rects[0].pos-rects[1].pos)**2)*(rects[0].pos-rects[1].pos)*rects[0].mass
         dp2 = -2*rects[0].mass/(rects[1].mass + rects[0].mass)*np.dot(old_vs[1]-old_vs[0], rects[1].pos-rects[0].pos)/(np.linalg.norm(rects[1].pos-rects[0].pos)**2)*(rects[1].pos-rects[0].pos)*rects[1].mass
         F1 = dp1/dt
@@ -160,17 +158,16 @@ class Physics_Canvas:
         point_of_force = rects[0].pos-(rects[0].pos-rects[1].pos)/2
         point_on_rect = [None, None]
         for n, rect in enumerate(rects):
-            point_on_rect[n] = self.point_on_line(rect.corners[0], rect.corners[1], point_of_force)
+            point_on_rect[n] = self.__point_on_line(rect.corners[0], rect.corners[1], point_of_force)
             for i in range(1, 4):
-                x = self.point_on_line(rect.corners[i], rect.corners[(i+1)%4], point_of_force)
+                x = self.__point_on_line(rect.corners[i], rect.corners[(i+1)%4], point_of_force)
                 if np.linalg.norm(x-point_of_force)<np.linalg.norm(point_on_rect[n]-point_of_force):
                     point_on_rect[n] = x
         a1 = point_on_rect[0]-rects[0].pos
         a2 = point_on_rect[1]-rects[1].pos
         return [F1, F2], [a1, a2]
 
-
-    def collision_check(self, rects):
+    def __collision_check(self, rects):
         rect1:Rectangle = rects[0]
         rect2:Rectangle = rects[1]
         e1, e2 = rect1.proj_dir()
@@ -196,66 +193,55 @@ class Physics_Canvas:
         if not 0 in coll:
             return rects
 
-    def remove_rect_internal(self, rect:Rectangle):
-        name = self.get_rect_name(rect)
+    def __remove_rect_internal(self, rect:Rectangle):
+        name = self.__get_rect_name(rect)
         del rect
-        del self.rects[name]
+        del self.__rects[name]
 
-        
+    def __blow_up(self, rect):
+        self.__notification[self.__get_rect_name(rect)].append('Blown_up')
+        self.__remove_rect_internal(rect)
 
-    def blow_up(self, rect):
-        self.notification[self.get_rect_name(rect)].append('Blown_up')
-        self.remove_rect_internal(rect)
-
-    def collision_detector(self, rects):
-        rect_pairs = [[self.rects[key1], self.rects[key2]] for key1 in rects for key2 in rects if np.linalg.norm(self.rects[key1].pos) < np.linalg.norm(self.rects[key2].pos)]
+    def __collision_detector(self, rects):
+        rect_pairs = [[self.__rects[key1], self.__rects[key2]] for key1 in rects for key2 in rects if np.linalg.norm(self.__rects[key1].pos) < np.linalg.norm(self.__rects[key2].pos)]
         colliding = []
         with future.ThreadPoolExecutor() as ex:
-            results = ex.map(self.collision_check, rect_pairs)
+            results = ex.map(self.__collision_check, rect_pairs)
             for r in results:
                 if not r is None:
                     colliding.append(r)
         return colliding
         
-        
-
-
-    def collision_handler(self, rects, vs, dt):
+    def __collision_handler(self, rects, vs, dt):
         e1 = -vs[0]/np.linalg.norm(vs[0]) if np.any(vs[0]!= np.zeros(2)) else np.zeros(2)
         e2 = -vs[1]/np.linalg.norm(vs[1]) if np.any(vs[1]!= np.zeros(2)) else np.zeros(2)
         if np.all(e1 == np.zeros(2)) and np.all(e2 == np.zeros(2)):
             raise Exception('Two rectangles without prior velocity are colliding')
-        coll = self.collision_check(rects)
+        coll = self.__collision_check(rects)
         while not coll == None:
-            rects[0].creep(e1, 1/self.res)
-            rects[1].creep(e2, 1/self.res)
-            coll = self.collision_check(rects)
+            rects[0].creep(e1, 1/self.__res)
+            rects[1].creep(e2, 1/self.__res)
+            coll = self.__collision_check(rects)
         
-        Fs, As = self.force_a_cal(rects, vs, dt)
+        Fs, As = self.__force_a_cal(rects, vs, dt)
         for i, rect in enumerate(rects):
             if not rect.destructable:
                 rect.forces['Coll_F'] = [Fs[i], dt, As[i]]
             else:
-                self.blow_up(rect)
+                self.__blow_up(rect)
         
-        
-        
-
-
-    def collisions(self, old_vs, dt):
-        collisions = self.collision_detector(self.rects)
+    def __collisions(self, old_vs, dt):
+        collisions = self.__collision_detector(self.__rects)
         if not collisions is []:
             for pair in collisions:
-                self.collision_handler(pair, [old_vs[pair[0]], old_vs[pair[1]]], dt)
+                self.__collision_handler(pair, [old_vs[pair[0]], old_vs[pair[1]]], dt)
 
-    
-
-    def update_rect(self, dt, old_v, rect):
+    def __update_rect(self, dt, old_v, rect):
         a = np.zeros(2)
         alpha = 0
         Dt = dt
         keys_to_delete = []
-        for _, surface in self.surfaces.items():
+        for _, surface in self.__surfaces.items():
             surface.apply_friction(rect)
             surface.apply_air_resistance(rect)
         for name, force in rect.forces.items():
@@ -279,26 +265,24 @@ class Physics_Canvas:
 
         s = a/2*Dt**2
         theta = alpha/2*Dt**2
-        mes = rect.move(dt, s, self.res)
+        mes = rect.move(dt, s, self.__res)
         if not mes is None:
-            self.notification[self.get_rect_name(rect)].append(mes)
-        mes = rect.rotate(dt, theta, self.res)
+            self.__notification[self.__get_rect_name(rect)].append(mes)
+        mes = rect.rotate(dt, theta, self.__res)
         if not mes is None:
-            self.notification[self.get_rect_name(rect)].append(mes)
+            self.__notification[self.__get_rect_name(rect)].append(mes)
         old_v[rect] = np.copy(rect.vel)
         rect.vel += a*Dt
-        if np.linalg.norm(rect.vel) < 1/self.res/10:
+        if np.linalg.norm(rect.vel) < 1/self.__res/10:
             rect.vel = np.zeros(2)
         rect.angle_vel += alpha*Dt
-        if np.linalg.norm(rect.angle_vel) < np.pi/self.res/10:
+        if np.linalg.norm(rect.angle_vel) < np.pi/self.__res/10:
             rect.angle_vel = 0
 
-        for _, surface in self.surfaces.items():
+        for _, surface in self.__surfaces.items():
             mes = surface.notify(rect)
             if not mes is None:
-                self.notification[self.get_rect_name(rect)].append(mes)
-
-
+                self.__notification[self.__get_rect_name(rect)].append(mes)
 
     def update(self, dt):
 
@@ -306,121 +290,131 @@ class Physics_Canvas:
         ovs = []
         dts = []
         rects = []
-        for key in self.rects:
-            rects.append(self.rects[key])
+        for key in self.__rects:
+            rects.append(self.__rects[key])
             ovs.append(old_v)
             dts.append(dt)
         with future.ThreadPoolExecutor() as ex:
-            results = ex.map(self.update_rect, dts, ovs, rects)
-            for r in results:
+            results = ex.map(self.__update_rect, dts, ovs, rects)
+            for _ in results:
                 pass
         
             
 
-        self.collisions(old_v, dt)
-        notifications = self.notification.copy()
-        for key in self.notification:
-            self.notification[key]=[]
+        self.__collisions(old_v, dt)
+        notifications = self.__notification.copy()
+        for key in self.__notification:
+            self.__notification[key]=[]
         return notifications
         
-    
     def gen_rect(self, name, w, h, m):
         if w==0 or h==0 or m==0:
             raise Exception("Width, height, or mass can't be zero")
-        if name in self.rects:
+        if name in self.__rects:
             raise Exception(f'Rectangle with the name {name} already exist')
-        self.rects[name] = self.Rectangle(w, h, m)
-        self.notification[name] = []
+        self.__rects[name] = self.Rectangle(w, h, m)
+        self.__notification[name] = []
 
-    def force(self, Fx, Fy, t, ax, ay, Fname, *names):
+    def add_force(self, F, t, a, Fname, *names):
         for name in names:
             try:
-                self.rects[name].forces[Fname] = [np.array([Fx, Fy]).astype(np.float64), t, np.array([ax, ay]).astype(np.float64)]
+                self.__rects[name].forces[Fname] = [F, t, a]
             except KeyError:
                 raise Exception(f'There is no rectangle by the name {name}')
 
     def make_surface(self, S_name, coeff_fric, xrange, yrange, g, air, *names):
         rects = []
-        for name in names:
-            rects.append(self.rects[name])
-        self.surfaces[S_name] = self.Surface(coeff_fric, xrange, yrange, g, air, rects)
+        if names == ():
+            for _, val in self.__rects.items():
+                rects.append(val)
+        else:
+            for name in names:
+                try:
+                    rects.append(self.__rects[name])
+                except KeyError:
+                    raise Exception(f'There is no rectangle by the name {name}')
+        self.__surfaces[S_name] = self.Surface(coeff_fric, xrange, yrange, g, air, rects)
 
-
-    def place_rect(self, name, x, y):
+    def place_rect(self, name, pos):
         try:
-            self.rects[name].move_to(np.array([x, y]))
+            self.__rects[name].move_to(pos)
         except KeyError:
             raise Exception(f'There is no rectangle by the name {name}')
 
-    
     def rotate_rect(self, name, theta):
         try:
-            self.rects[name].rotate_to(theta)
+            self.__rects[name].rotate_to(theta)
         except KeyError:
             raise Exception(f'There is no rectangle by the name {name}')
     
     def get_vel(self, name):
         try:
-            return np.copy(self.rects[name].vel)
+            return np.copy(self.__rects[name].vel)
         except KeyError:
             raise Exception(f'There is no rectangle by the name {name}')
     
     def get_pos(self, name):
         try:
-            return np.copy(self.rects[name].pos)
+            return np.copy(self.__rects[name].pos)
         except KeyError:
             raise Exception(f'There is no rectangle by the name {name}')
     
     def get_angle(self, name):
         try:
-            return np.copy(self.rects[name].angle)
+            return np.copy(self.__rects[name].angle)
         except KeyError:
             raise Exception(f'There is no rectangle by the name {name}')
 
     def get_angle_vel(self, name):
         try:
-            return np.copy(self.rects[name].angle_vel)
+            return np.copy(self.__rects[name].angle_vel)
         except KeyError:
             raise Exception(f'There is no rectangle by the name {name}')
 
     def make_immoveable(self, name):
         try:
-            self.rects[name].moveability(False)
+            self.__rects[name].moveability(False)
         except KeyError:
             raise Exception(f'There is no rectangle by the name {name}')
     
     def make_moveable(self, name):
         try:
-            self.rects[name].moveability(True)
+            self.__rects[name].moveability(True)
         except KeyError:
             raise Exception(f'There is no rectangle by the name {name}')
     
     def make_destructable(self, name):
         try:
-            self.rects[name].destructability(True)
+            self.__rects[name].destructability(True)
         except KeyError:
             raise Exception(f'There is no rectangle by the name {name}')
     
     def make_indestructable(self, name):
         try:
-            self.rects[name].destructability(False)
+            self.__rects[name].destructability(False)
         except KeyError:
             raise Exception(f'There is no rectangle by the name {name}')
     
-    def set_vel(self, name, vx, vy):
+    def set_vel(self, name, v):
         try:
-            self.rects[name].set_vel(np.array([vx, vy]))
+            self.__rects[name].set_vel(v)
         except KeyError:
             raise Exception(f'There is no rectangle by the name {name}')
 
     def remove_rect(self, name):
         try:
-            self.remove_rect_internal(self.rects[name])
+            self.__remove_rect_internal(self.__rects[name])
+        except KeyError:
+            raise Exception(f'There is no rectangle by the name {name}')
+
+    def blowup_rect(self, name):
+        try:
+            self.__blow_up(self.__rects[name])
         except KeyError:
             raise Exception(f'There is no rectangle by the name {name}')
     
     def add_notification(self, S_name, message):
         try:
-            self.surfaces[S_name].add_notify(message)
+            self.__surfaces[S_name].add_notify(message)
         except KeyError:
             raise Exception(f'There is no surface by the name {S_name}')
