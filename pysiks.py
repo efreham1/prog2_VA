@@ -16,7 +16,7 @@ class Physics_Canvas:
             self.width = w
             self.height = h
             self.mass = m
-            self.momI = 1/12*3*(w**2+h**2)
+            self.momI = m*1/12*3*(w**2+h**2)
             self.pos = np.zeros(2)
             self.vel = np.zeros(2)
             self.angle = 0
