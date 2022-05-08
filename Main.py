@@ -1,9 +1,11 @@
 import tkinter as tk
+from turtle import window_width
 from pysiks import Physics_Canvas as PC
 from PIL import Image, ImageTk
 import numpy as np
 import random
 from time import perf_counter as pc
+from time import sleep
 
 class Car:
 
@@ -13,79 +15,99 @@ class Car:
         self.__ppm = ppm
         self.__image = Image.open(filepath).resize((2*self.__ppm, 4*self.__ppm))
         self.__image_angle = 0
-        self.__name = name
+        self.name = name
         self.__mass = 1000
-        self.__phy_can.gen_rect(self.__name, 2, 4, self.__mass)
-        self.__phy_can.make_destructable(self.__name)
+        self.__phy_can.gen_rect(self.name, 2, 4, self.__mass)
+        self.__phy_can.make_destructable(self.name)
         self.__base_power = 400000. #W
         self.__base_launch_force = 10000.
-        self.__power_mod = 1
-        self.__launch_mod = 1
+        self.__power_mod = 1.25
+        self.__launch_mod = 0.8
         self.__power = self.__base_power*self.__power_mod
         self.__launch_force = self.__base_launch_force*self.__launch_mod
         self.__running = False
         self.__tkimage = ImageTk.PhotoImage(self.__image)
         self.object = self.__tk_canvas.create_image(0, 0, image=self.__tkimage)
+        self.__is_player_car = False
 
     def __coordinate_to_pixel(self, pos):
         return round(pos[0]*self.__ppm)+950, round(-pos[1]*self.__ppm)+175
 
     def __get_F(self):
-        v = np.linalg.norm(self.__phy_can.get_vel(self.__name))
+        v = np.linalg.norm(self.__phy_can.get_vel(self.name))
         fmax = self.__power/v if v!= 0 else 1
         v_fmax = 40
         if v > v_fmax:
             v_fmax = v
         f = ((v_fmax-v)*self.__launch_force+v*fmax)/v_fmax
-        F = f*np.array([-np.sin(self.__phy_can.get_angle(self.__name)), np.cos(self.__phy_can.get_angle(self.__name))])
+        F = f*np.array([-np.sin(self.__phy_can.get_angle(self.name)), np.cos(self.__phy_can.get_angle(self.name))])
         return F
     
 
     def __get_random(self, mod):
-        x = np.random.exponential()
-        limit = 3.8*(5-mod*2)
-        if x > limit:
+        x = random.uniform(0, 100*10000**2/10000**mod)
+        limit = 20
+        if x < limit:
             return True
         else:
             return False
     def __check_accident(self):
         if self.__get_random(self.__power_mod):
-            self.__phy_can.blowup_rect(self.__name)
+            self.__phy_can.blowup_rect(self.name)
         if self.__get_random(self.__launch_mod):
-            byte = random.randbytes(1)
-            a = 3*np.array([-np.sin(self.__phy_can.get_angle(self.__name)), np.cos(self.__phy_can.get_angle(self.__name))])
-            f = 1000
-            if byte:
-                self.__phy_can.add_force(f*np.array([np.cos(self.__phy_can.get_angle(self.__name)), np.sin(self.__phy_can.get_angle(self.__name))]), 0.5, a, 'oof', self.__name)
+            left_right = random.choice([False, True])
+            a = 50*np.array([-np.sin(self.__phy_can.get_angle(self.name)), np.cos(self.__phy_can.get_angle(self.name))])
+            f = 100
+            if left_right:
+                F = f*np.array([np.cos(self.__phy_can.get_angle(self.name)), np.sin(self.__phy_can.get_angle(self.name))])
+                self.__phy_can.add_force(F, 1, a, 'oof', self.name)
             else:
-                self.__phy_can.add_force(np.array([-np.cos(self.__phy_can.get_angle(self.__name)), np.sin(self.__phy_can.get_angle(self.__name))]), 0.5, a, 'oof', self.__name)
+                F = f*np.array([-np.cos(self.__phy_can.get_angle(self.name)), np.sin(self.__phy_can.get_angle(self.name))])
+                self.__phy_can.add_force(F, 1, a, 'oof', self.name)
+
     
-    def update_car(self, dt):
+    def update_car(self, info):
+        if self.__is_player_car:
+            self.change_modifiers(info['power'].get()/100, info['launch'].get()/100)
         if self.__running:
-            self.__phy_can.add_force(self.__get_F(), 'inf', np.zeros(2), 'Engine', self.__name)
+            self.__phy_can.add_force(self.__get_F(), 'inf', np.zeros(2), 'Engine', self.name)
             self.__check_accident()
     
     def update_graphics(self):
-        angle = self.__phy_can.get_angle(self.__name)
+        angle = self.__phy_can.get_angle(self.name)
         self.__image = self.__image.rotate((angle-self.__image_angle)/np.pi*180, expand=1)
         self.__image_angle = angle
         self.__tk_canvas.delete(self.object)
         self.__tkimage = ImageTk.PhotoImage(self.__image)
-        x,y = self.__coordinate_to_pixel(self.__phy_can.get_pos(self.__name))
+        x,y = self.__coordinate_to_pixel(self.__phy_can.get_pos(self.name))
         self.object = self.__tk_canvas.create_image(x, y, image=self.__tkimage)
     
     def place(self, pos, angle):
-        self.__phy_can.place_rect(self.__name, pos)
-        self.__phy_can.rotate_rect(self.__name, angle)
-        self.__image_angle = self.__phy_can.get_angle(self.__name)
+        self.__phy_can.place_rect(self.name, pos)
+        self.__phy_can.rotate_rect(self.name, angle)
+        self.__image_angle = self.__phy_can.get_angle(self.name)
         self.__image = self.__image.rotate(self.__image_angle/np.pi*180, expand=1)
         self.__tk_canvas.delete(self.object)
         self.__tkimage = ImageTk.PhotoImage(self.__image)
-        x,y = self.__coordinate_to_pixel(self.__phy_can.get_pos(self.__name))
+        x,y = self.__coordinate_to_pixel(self.__phy_can.get_pos(self.name))
         self.object = self.__tk_canvas.create_image(x, y, image=self.__tkimage)
 
     def start_engine(self):
         self.__running = True
+
+    def change_modifiers(self, pow_mod, launch_mod):
+        self.__launch_mod = launch_mod
+        self.__power_mod = pow_mod
+        self.__power = self.__base_power*self.__power_mod
+        self.__launch_force = self.__base_launch_force*self.__launch_mod
+    
+    def delete_it(self):
+        self.__phy_can.remove_rect(self.name)
+        self.__tk_canvas.delete(self.object)
+        del self
+    
+    def make_player_car(self):
+        self.__is_player_car = True
 
         
 class Wall:
@@ -130,56 +152,125 @@ class Background:
     def add_notification(self, message):
         self.__phy_can.add_notification(self.__name, message)
 
-def start_race(dt, cars, physics, canvas):
-    canvas.after(int(dt*1000), update_everything, dt, cars, physics, canvas)
+def start_race(info):
+    info['race_running'] = True
+    info['canvas'].after(int(info['dt']*1000), update_everything, info)
+    button_start['state'] = "disabled"
+    change_launch['state'] = "disabled"
+    change_power['state'] = "disabled"
 
-def update_everything(dt, cars, physics, canvas):
-    start = pc()
-    for car in cars:
-        car.update_car(dt)
-    physics.update(dt)
-    for car in cars:
-        car.update_graphics()
-    end = pc()
-    time_diff = end-start
-    if time_diff > dt:
-        time_diff = dt-0.001
-    canvas.after(int(dt*1000-time_diff*1000), update_everything, dt, cars, physics, canvas)
-    
+def update_everything(info):
+    if info['race_running']:
+        start = pc()
+        for car in info['cars']:
+            car.update_car(info)
+        notifications = physics.update(info['dt'])       
+        for rect_name, messages in notifications.items():
+            for message in messages:
+                if message == 'Blown_up':
+                    for car in info['cars']:
+                        if car.name == rect_name:
+                            correct_car = car
+                    pos = info['canvas'].coords(correct_car.object)
+                    info['cars'].pop(info['cars'].index(correct_car))
+                    info['explosions'].append(info['canvas'].create_image(pos[0], pos[1], image=explosion))
+                    del correct_car
+                elif message == 'Finnished':
+                    info['race_running'] = False
+                    victory(info, rect_name)
+        for car in info['cars']:
+            car.update_graphics()
+        end = pc()
+        time_diff = end-start
+        if time_diff > info['dt']:
+            time_diff = info['dt']-0.001
+        info['canvas'].after(int(info['dt']*1000), update_everything, info)
+
+
+def victory(info, name):
+    popup = tk.Toplevel(info['window'])
+    popup.geometry('250x150')
+    tk.Label(popup, text= f'The {name} has won!\n Do you wish to reset or quit?').place(x=30, y=10)
+    tk.Button(popup, text= 'Reset', command=lambda:reset(info, popup)).place(x=30, y=70)
+    tk.Button(popup, text= 'Quit', command=info['window'].destroy).place(x=180, y=70)
+
+
+def setup(canvas, physics_can, dt, window, power, launch):
+    info = {}
+    info['power'] = power
+    info['launch'] = launch
+    info['window'] = window
+    info['canvas'] = canvas
+    info['physics'] = physics_can
+    info['dt'] = dt
+    info['cars'] = [Car(canvas, physics_can, 'GitHub local repositories\prog2_VA\Elements\Blue car.png', 4, 'Blue car'), Car(canvas, physics_can, 'GitHub local repositories\prog2_VA\Elements\Red car.png', 4, 'Red car')]
+    info['track'] = Background(canvas, physics_can, 'GitHub local repositories\prog2_VA\Elements\Track.png', [0, 1900], [150, 200], 0.02, 'Track', 4, True)
+    info['gravel_below'] = Background(canvas, physics_can, 'GitHub local repositories\prog2_VA\Elements\Dirt.png', [0, 1900], [200, 240], 0.2, 'Gravel1', 4, True)
+    info['gravel_above'] = Background(canvas, physics_can, 'GitHub local repositories\prog2_VA\Elements\Dirt.png', [0, 1900], [110, 150], 0.2, 'Gravel2', 4, True)
+    info['grass_below'] = Background(canvas, physics_can, 'GitHub local repositories\prog2_VA\Elements\Grass.png', [0, 1900], [240, 350], 0.1, 'Grass1', 4, True)
+    info['grass_above'] = Background(canvas, physics_can, 'GitHub local repositories\prog2_VA\Elements\Grass.png', [0, 1900], [0, 110], 0.1, 'Grass2', 4, True)
+    info['finnish_line'] = Background(canvas, physics_can, 'GitHub local repositories\prog2_VA\Elements\line.png', [1820, 2200], [145, 205], 0, 'Finnishline', 4, False)
+    info['finnish_line'].add_notification('Finnished')
+    info['wall_above'] = Wall(canvas, physics_can, 'GitHub local repositories\prog2_VA\Elements\Wall.png', 4, 'wall1', [0, 1900], [0, 70])
+    info['wall_below'] = Wall(canvas, physics_can, 'GitHub local repositories\prog2_VA\Elements\Wall.png', 4, 'wall2', [0, 1900], [280, 350])
+    info['cars'][0].place(np.array([-237, 3]), -np.pi/2)
+    info['cars'][1].place(np.array([-237, -3]), -np.pi/2)
+    info['race_running'] = False
+    info['explosions'] = []
+    return info
+
+def reset(info:dict, *popup):
+    info['race_running'] = False
+    for expl in info['explosions']:
+        info['canvas'].delete(expl)
+    for car in info['cars']:
+        car.delete_it()
+    info['cars'] = [Car(info['canvas'], info['physics'], 'GitHub local repositories\prog2_VA\Elements\Blue car.png', 4, 'Blue car'), Car(info['canvas'], info['physics'], 'GitHub local repositories\prog2_VA\Elements\Red car.png', 4, 'Red car')]
+    info['cars'][0].place(np.array([-237, 3]), -np.pi/2)
+    info['cars'][1].place(np.array([-237, -3]), -np.pi/2)
+    info['cars'][0].start_engine()
+    info['cars'][1].make_player_car()
+    if popup != ():
+        popup[0].destroy()
+    button_start['state'] = "normal"
+    change_launch['state'] = "normal"
+    change_power['state'] = "normal"
+
+def start_player_engine(info):
+    info['cars'][1].start_engine()
+
 window = tk.Tk()
+physics = PC(10)
 window.geometry('1900x700')
 window.resizable(width=False, height=False)
 controls = tk.Frame(window, width=1900, height=350)
 box = tk.Canvas(window, width=1900, height=350, bg='white')
+explosion = ImageTk.PhotoImage(Image.open('GitHub local repositories\prog2_VA\Elements\Explosion.png'))
+change_power = tk.Scale(controls, from_=0, to=200, orient='horizontal')
+change_launch = tk.Scale(controls, from_=0, to=200, orient='horizontal')
+info = setup(box, physics, 0.1, window, change_power, change_launch)
 
-button_start = tk.Button(controls, text='Start!')
-button_stop = tk.Button(controls, text='Abort!')
+button_start = tk.Button(controls, text='Start!', command=lambda: start_race(info))
+button_stop = tk.Button(controls, text='Abort!', command=lambda: reset(info))
+button_egnition = tk.Button(controls, text='Start engine', command=lambda: start_player_engine(info))
+power_label = tk.Label(controls, text='Engine power:')
+launch_label = tk.Label(controls, text='Engine torque:')
 button_start.grid(row=0, column=0)
 button_stop.grid(row=0, column=1)
+button_egnition.grid(row=0, column=2)
+change_power.grid(row=2, column=0)
+power_label.grid(row=1, column=0)
+change_launch.grid(row=2, column=1)
+launch_label.grid(row=1, column=1)
 
 controls.grid(row=1, column=0)
 box.grid(row=0, column=0)
 
 
-physics = PC(100)
-car1 = Car(box, physics, 'GitHub local repositories\prog2_VA\Elements\Blue car.png', 4, 'Blue car')
-car2 = Car(box, physics, 'GitHub local repositories\prog2_VA\Elements\Red car.png', 4, 'Red car')
-track = Background(box, physics, 'GitHub local repositories\prog2_VA\Elements\Track.png', [0, 1900], [150, 200], 0.02, 'Track', 4, True)
-gravel_below = Background(box, physics, 'GitHub local repositories\prog2_VA\Elements\Dirt.png', [0, 1900], [200, 240], 0.2, 'Gravel1', 4, True)
-gravel_above = Background(box, physics, 'GitHub local repositories\prog2_VA\Elements\Dirt.png', [0, 1900], [110, 150], 0.2, 'Gravel2', 4, True)
-grass_below = Background(box, physics, 'GitHub local repositories\prog2_VA\Elements\Grass.png', [0, 1900], [240, 350], 0.1, 'Grass1', 4, True)
-grass_above = Background(box, physics, 'GitHub local repositories\prog2_VA\Elements\Grass.png', [0, 1900], [0, 110], 0.1, 'Grass2', 4, True)
-finnish_line = Background(box, physics, 'GitHub local repositories\prog2_VA\Elements\line.png', [1820, 2200], [145, 205], 0, 'Finnishline', 4, False)
-finnish_line.add_notification('Finnished')
-wall_above = Wall(box, physics, 'GitHub local repositories\prog2_VA\Elements\Wall.png', 4, 'wall1', [0, 1900], [0, 70])
-wall_below = Wall(box, physics, 'GitHub local repositories\prog2_VA\Elements\Wall.png', 4, 'wall2', [0, 1900], [280, 350])
-car1.place(np.array([-237, 3]), -np.pi/2)
-car2.place(np.array([-237, -3]), -np.pi/2)
 
 
+info['cars'][0].start_engine()
+info['cars'][1].make_player_car()
 
-car1.start_engine()
-car2.start_engine()
-start_race(0.1, [car1, car2], physics, box)
 
 window.mainloop()

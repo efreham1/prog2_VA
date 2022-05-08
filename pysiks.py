@@ -25,6 +25,7 @@ class Physics_Canvas:
             self.moveable = True
             self.destructable = False
             self.forces = {}
+            self.gonna_blow = False
         
         def cal_corners(self):
             r = np.sqrt((self.width**2+self.height**2)/4)
@@ -63,9 +64,8 @@ class Physics_Canvas:
         def rotate(self, dt, theta, res):
             if self.moveable:
                 da = self.angle_vel*dt + theta
-                if da > np.pi*2/res:
-                    self.angle += da
-                    self.cal_corners()
+                self.angle += da
+                self.cal_corners()
             else:
                 return 'Tried rotating, rectangle immoveable'
         
@@ -228,7 +228,7 @@ class Physics_Canvas:
             if not rect.destructable:
                 rect.forces['Coll_F'] = [Fs[i], dt, As[i]]
             else:
-                self.__blow_up(rect)
+                rect.gonna_blow = True
         
     def __collisions(self, old_vs, dt):
         collisions = self.__collision_detector(self.__rects)
@@ -237,6 +237,9 @@ class Physics_Canvas:
                 self.__collision_handler(pair, [old_vs[pair[0]], old_vs[pair[1]]], dt)
 
     def __update_rect(self, dt, old_v, rect):
+        if rect.gonna_blow:
+            self.__blow_up(rect)
+            return
         a = np.zeros(2)
         alpha = 0
         Dt = dt
@@ -247,17 +250,17 @@ class Physics_Canvas:
         for name, force in rect.forces.items():
             if force[1] == 'inf':
                 a += force[0]/rect.mass
-                alpha += np.linalg.norm(np.cross(force[2], force[0]))/rect.momI
+                alpha += np.cross(force[2], force[0])/rect.momI
             elif force[1]<= dt:
                 a += force[0]/rect.mass
-                alpha += np.linalg.norm(np.cross(force[2], force[0]))/rect.momI
+                alpha += np.cross(force[2], force[0])/rect.momI
                 Dt = force[1]
                 if Dt < 0:
-                    raise Exception('Negative time differance')
+                    raise Exception('Negative time difference')
                 keys_to_delete.append(name)
             else:
                 a += force[0]/rect.mass
-                alpha += np.linalg.norm(np.cross(force[2], force[0]))/rect.momI
+                alpha += np.cross(force[2], force[0])/rect.momI
                 force[1] += -dt
         for key in keys_to_delete:
             rect.forces.pop(key)
@@ -409,7 +412,7 @@ class Physics_Canvas:
 
     def blowup_rect(self, name):
         try:
-            self.__blow_up(self.__rects[name])
+            self.__rects[name].gonna_blow = True
         except KeyError:
             raise Exception(f'There is no rectangle by the name {name}')
     
