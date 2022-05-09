@@ -1,3 +1,10 @@
+"""
+Date: 22-09-05
+Name: Fredrik Hammarberg
+Mail: Hammarberg83@gmail.com
+Presented to: Julia Sulyaeva
+"""
+
 import numpy as np
 import concurrent.futures as future
 

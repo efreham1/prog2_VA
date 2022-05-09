@@ -1,3 +1,9 @@
+"""
+Date: 22-09-05
+Name: Fredrik Hammarberg
+Mail: Hammarberg83@gmail.com
+Presented to: Julia Sulyaeva
+"""
 import tkinter as tk
 from pysiks import Physics_Canvas as PC
 from PIL import Image, ImageTk
@@ -53,14 +59,14 @@ class Car:
         if self.__get_random(self.__power_mod):
             self.__phy_can.blowup_rect(self.name)
         if self.__get_random(self.__launch_mod):
-            left_right = random.choice([False, True])
+            left_right = random.randint(0, 1)
             a = 50*np.array([-np.sin(self.__phy_can.get_angle(self.name)), np.cos(self.__phy_can.get_angle(self.name))])
             f = 100
-            if left_right:
+            if left_right == 1:
                 F = f*np.array([np.cos(self.__phy_can.get_angle(self.name)), np.sin(self.__phy_can.get_angle(self.name))])
                 self.__phy_can.add_force(F, 1, a, 'oof', self.name)
-            else:
-                F = f*np.array([-np.cos(self.__phy_can.get_angle(self.name)), np.sin(self.__phy_can.get_angle(self.name))])
+            elif left_right == 0:
+                F = f*np.array([-np.cos(self.__phy_can.get_angle(self.name)), -np.sin(self.__phy_can.get_angle(self.name))])
                 self.__phy_can.add_force(F, 1, a, 'oof', self.name)
 
     
@@ -106,6 +112,9 @@ class Car:
     
     def make_player_car(self):
         self.__is_player_car = True
+
+    def who_won(self):
+        return self.__phy_can.get_pos(self.name)[0]+237
 
         
 class Wall:
@@ -175,9 +184,11 @@ def update_everything(info):
                     del correct_car
                 elif message == 'Finnished':
                     info['race_running'] = False
-                    victory(info, rect_name)
+                    info['victory'] = True
         for car in info['cars']:
             car.update_graphics()
+        if info['victory']:
+            victory(info)
         end = pc()
         time_diff = end-start
         if time_diff > info['dt']:
@@ -185,10 +196,21 @@ def update_everything(info):
         info['canvas'].after(int(info['dt']*1000), update_everything, info)
 
 
-def victory(info, name):
+def victory(info):
+    car1 = info['cars'][0].who_won()
+    if len(info['cars']) == 2:
+        car2 = info['cars'][1].who_won()
+    else:
+        car2 = -237
+    if car1 > car2:
+        text = f"The {info['cars'][0].name} has won!"
+    elif car1 < car2:
+        text = f"The {info['cars'][1].name} has won!"
+    else:
+        text = 'The race was a tie!'
     popup = tk.Toplevel(info['window'])
     popup.geometry('250x150')
-    tk.Label(popup, text= f'The {name} has won!\n Do you wish to reset or quit?').place(x=30, y=10)
+    tk.Label(popup, text= f'{text}\n Do you wish to reset or quit?').place(x=30, y=10)
     tk.Button(popup, text= 'Reset', command=lambda:reset(info, popup)).place(x=30, y=70)
     tk.Button(popup, text= 'Quit', command=info['window'].destroy).place(x=180, y=70)
 
@@ -215,10 +237,12 @@ def setup(canvas, physics_can, dt, window, power, launch):
     info['cars'][1].place(np.array([-237, -3]), -np.pi/2)
     info['race_running'] = False
     info['explosions'] = []
+    info['victory'] = False
     return info
 
 def reset(info:dict, *popup):
     info['race_running'] = False
+    info['victory'] = False
     for expl in info['explosions']:
         info['canvas'].delete(expl)
     for car in info['cars']:
@@ -237,38 +261,43 @@ def reset(info:dict, *popup):
 def start_player_engine(info):
     info['cars'][1].start_engine()
 
-window = tk.Tk()
-physics = PC(10)
-window.geometry('1900x700')
-window.resizable(width=False, height=False)
-controls = tk.Frame(window, width=1900, height=350)
-box = tk.Canvas(window, width=1900, height=350, bg='white')
-explosion = ImageTk.PhotoImage(Image.open('prog2_VA\Elements\Explosion.png'))
-change_power = tk.Scale(controls, from_=0, to=200, orient='horizontal')
-change_launch = tk.Scale(controls, from_=0, to=200, orient='horizontal')
-info = setup(box, physics, 0.1, window, change_power, change_launch)
-
-button_start = tk.Button(controls, text='Start!', command=lambda: start_race(info))
-button_stop = tk.Button(controls, text='Abort!', command=lambda: reset(info))
-button_egnition = tk.Button(controls, text='Start engine', command=lambda: start_player_engine(info))
-power_label = tk.Label(controls, text='Engine power:')
-launch_label = tk.Label(controls, text='Engine torque:')
-button_start.grid(row=0, column=0)
-button_stop.grid(row=0, column=1)
-button_egnition.grid(row=0, column=2)
-change_power.grid(row=2, column=0)
-power_label.grid(row=1, column=0)
-change_launch.grid(row=2, column=1)
-launch_label.grid(row=1, column=1)
-
-controls.grid(row=1, column=0)
-box.grid(row=0, column=0)
+def main():
+    info['cars'][0].start_engine()
+    info['cars'][1].make_player_car()
+    window.mainloop()
 
 
 
 
-info['cars'][0].start_engine()
-info['cars'][1].make_player_car()
 
+if __name__ == '__main__':
+    
+    window = tk.Tk()
+    physics = PC(10)
+    window.geometry('1900x700')
+    window.resizable(width=False, height=False)
+    controls = tk.Frame(window, width=1900, height=350)
+    box = tk.Canvas(window, width=1900, height=350, bg='white')
+    explosion = ImageTk.PhotoImage(Image.open('prog2_VA\Elements\Explosion.png'))
+    change_power = tk.Scale(controls, from_=0, to=200, orient='horizontal')
+    change_launch = tk.Scale(controls, from_=0, to=200, orient='horizontal')
+    info = setup(box, physics, 0.1, window, change_power, change_launch)
 
-window.mainloop()
+    button_start = tk.Button(controls, text='Start!', command=lambda: start_race(info))
+    button_stop = tk.Button(controls, text='Abort!', command=lambda: reset(info))
+    button_egnition = tk.Button(controls, text='Start engine', command=lambda: start_player_engine(info))
+    power_label = tk.Label(controls, text='Engine power:')
+    launch_label = tk.Label(controls, text='Engine torque:')
+    button_start.grid(row=0, column=0)
+    button_stop.grid(row=0, column=1)
+    button_egnition.grid(row=0, column=2)
+    change_power.grid(row=2, column=0)
+    power_label.grid(row=1, column=0)
+    change_launch.grid(row=2, column=1)
+    launch_label.grid(row=1, column=1)
+
+    controls.grid(row=1, column=0)
+    box.grid(row=0, column=0)
+
+    main()
+
