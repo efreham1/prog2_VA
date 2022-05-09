@@ -1,11 +1,9 @@
 import tkinter as tk
-from turtle import window_width
 from pysiks import Physics_Canvas as PC
 from PIL import Image, ImageTk
 import numpy as np
 import random
 from time import perf_counter as pc
-from time import sleep
 
 class Car:
 
@@ -203,16 +201,16 @@ def setup(canvas, physics_can, dt, window, power, launch):
     info['canvas'] = canvas
     info['physics'] = physics_can
     info['dt'] = dt
-    info['cars'] = [Car(canvas, physics_can, 'GitHub local repositories\prog2_VA\Elements\Blue car.png', 4, 'Blue car'), Car(canvas, physics_can, 'GitHub local repositories\prog2_VA\Elements\Red car.png', 4, 'Red car')]
-    info['track'] = Background(canvas, physics_can, 'GitHub local repositories\prog2_VA\Elements\Track.png', [0, 1900], [150, 200], 0.02, 'Track', 4, True)
-    info['gravel_below'] = Background(canvas, physics_can, 'GitHub local repositories\prog2_VA\Elements\Dirt.png', [0, 1900], [200, 240], 0.2, 'Gravel1', 4, True)
-    info['gravel_above'] = Background(canvas, physics_can, 'GitHub local repositories\prog2_VA\Elements\Dirt.png', [0, 1900], [110, 150], 0.2, 'Gravel2', 4, True)
-    info['grass_below'] = Background(canvas, physics_can, 'GitHub local repositories\prog2_VA\Elements\Grass.png', [0, 1900], [240, 350], 0.1, 'Grass1', 4, True)
-    info['grass_above'] = Background(canvas, physics_can, 'GitHub local repositories\prog2_VA\Elements\Grass.png', [0, 1900], [0, 110], 0.1, 'Grass2', 4, True)
-    info['finnish_line'] = Background(canvas, physics_can, 'GitHub local repositories\prog2_VA\Elements\line.png', [1820, 2200], [145, 205], 0, 'Finnishline', 4, False)
+    info['cars'] = [Car(canvas, physics_can, 'prog2_VA\Elements\Blue car.png', 4, 'Blue car'), Car(canvas, physics_can, 'prog2_VA\Elements\Red car.png', 4, 'Red car')]
+    info['track'] = Background(canvas, physics_can, 'prog2_VA\Elements\Track.png', [0, 1900], [150, 200], 0.02, 'Track', 4, True)
+    info['gravel_below'] = Background(canvas, physics_can, 'prog2_VA\Elements\Dirt.png', [0, 1900], [200, 240], 0.2, 'Gravel1', 4, True)
+    info['gravel_above'] = Background(canvas, physics_can, 'prog2_VA\Elements\Dirt.png', [0, 1900], [110, 150], 0.2, 'Gravel2', 4, True)
+    info['grass_below'] = Background(canvas, physics_can, 'prog2_VA\Elements\Grass.png', [0, 1900], [240, 350], 0.1, 'Grass1', 4, True)
+    info['grass_above'] = Background(canvas, physics_can, 'prog2_VA\Elements\Grass.png', [0, 1900], [0, 110], 0.1, 'Grass2', 4, True)
+    info['finnish_line'] = Background(canvas, physics_can, 'prog2_VA\Elements\line.png', [1820, 2200], [145, 205], 0, 'Finnishline', 4, False)
     info['finnish_line'].add_notification('Finnished')
-    info['wall_above'] = Wall(canvas, physics_can, 'GitHub local repositories\prog2_VA\Elements\Wall.png', 4, 'wall1', [0, 1900], [0, 70])
-    info['wall_below'] = Wall(canvas, physics_can, 'GitHub local repositories\prog2_VA\Elements\Wall.png', 4, 'wall2', [0, 1900], [280, 350])
+    info['wall_above'] = Wall(canvas, physics_can, 'prog2_VA\Elements\Wall.png', 4, 'wall1', [0, 1900], [0, 70])
+    info['wall_below'] = Wall(canvas, physics_can, 'prog2_VA\Elements\Wall.png', 4, 'wall2', [0, 1900], [280, 350])
     info['cars'][0].place(np.array([-237, 3]), -np.pi/2)
     info['cars'][1].place(np.array([-237, -3]), -np.pi/2)
     info['race_running'] = False
@@ -225,7 +223,7 @@ def reset(info:dict, *popup):
         info['canvas'].delete(expl)
     for car in info['cars']:
         car.delete_it()
-    info['cars'] = [Car(info['canvas'], info['physics'], 'GitHub local repositories\prog2_VA\Elements\Blue car.png', 4, 'Blue car'), Car(info['canvas'], info['physics'], 'GitHub local repositories\prog2_VA\Elements\Red car.png', 4, 'Red car')]
+    info['cars'] = [Car(info['canvas'], info['physics'], 'prog2_VA\Elements\Blue car.png', 4, 'Blue car'), Car(info['canvas'], info['physics'], 'prog2_VA\Elements\Red car.png', 4, 'Red car')]
     info['cars'][0].place(np.array([-237, 3]), -np.pi/2)
     info['cars'][1].place(np.array([-237, -3]), -np.pi/2)
     info['cars'][0].start_engine()
@@ -245,7 +243,7 @@ window.geometry('1900x700')
 window.resizable(width=False, height=False)
 controls = tk.Frame(window, width=1900, height=350)
 box = tk.Canvas(window, width=1900, height=350, bg='white')
-explosion = ImageTk.PhotoImage(Image.open('GitHub local repositories\prog2_VA\Elements\Explosion.png'))
+explosion = ImageTk.PhotoImage(Image.open('prog2_VA\Elements\Explosion.png'))
 change_power = tk.Scale(controls, from_=0, to=200, orient='horizontal')
 change_launch = tk.Scale(controls, from_=0, to=200, orient='horizontal')
 info = setup(box, physics, 0.1, window, change_power, change_launch)

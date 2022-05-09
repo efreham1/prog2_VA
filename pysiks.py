@@ -1,4 +1,3 @@
-from matplotlib.patches import Rectangle
 import numpy as np
 import concurrent.futures as future
 
@@ -101,7 +100,7 @@ class Physics_Canvas:
             self.to_Notify = True
             self.message = message
         
-        def apply_friction(self, rect:Rectangle):
+        def apply_friction(self, rect):
             if self.on_surface(rect) and rect in self.for_rects:
                 Fmax = rect.mass*self.g*self.coeff_of_friction
             else:
@@ -121,7 +120,7 @@ class Physics_Canvas:
 
             rect.forces['Friction'] = [Fmax*d, 'inf' ,np.zeros(2)]
 
-        def apply_air_resistance(self, rect:Rectangle):
+        def apply_air_resistance(self, rect):
             if self.air and self.on_surface(rect) and np.any(rect.vel != np.zeros(2)) and rect in self.for_rects:
                 normal_to_v = np.array([rect.vel[1], -rect.vel[0]])
                 A = np.abs(np.dot(normal_to_v/np.linalg.norm(normal_to_v), rect.corners[0]-rect.corners[2]))
@@ -168,8 +167,8 @@ class Physics_Canvas:
         return [F1, F2], [a1, a2]
 
     def __collision_check(self, rects):
-        rect1:Rectangle = rects[0]
-        rect2:Rectangle = rects[1]
+        rect1 = rects[0]
+        rect2 = rects[1]
         e1, e2 = rect1.proj_dir()
         dir = [e1, e2]
         if rect1.angle%(np.pi/2) != rect2.angle%(np.pi/2):
